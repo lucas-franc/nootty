@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:flutter_quill/flutter_quill.dart';
 
@@ -22,7 +21,7 @@ class _NoteViewState extends State<NoteView> {
     final text = controller.document.toPlainText();
     final lines = text.split('\n');
     for (var line in lines) {
-      if (line.startsWith('# ')) {
+      if (isTitleMarkdown(line)) {
         _convertToHeader(line, quill.Attribute.h1);
       }
       if (isBoldMarkdown(line)) {
@@ -31,18 +30,28 @@ class _NoteViewState extends State<NoteView> {
     }
   }
 
-  RegExp regex = RegExp(r'(\*\*.*?\*\*)|(__.*?__)');
+  RegExp boldRegex = RegExp(r'(\*\*.*?\*\*)|(__.*?__)');
+  RegExp titleRegex = RegExp(r'^\#{1,6}\s');
 
   bool isBoldMarkdown(String text) {
-    return regex.hasMatch(text);
+    return boldRegex.hasMatch(text);
+  }
+
+  bool isTitleMarkdown(String text) {
+    return titleRegex.hasMatch(text);
   }
 
   void _convertToHeader(String line, quill.Attribute attribute) {
-    // Evitar alterações durante o listener
+    final cleanLine = line.substring(2);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final position = controller.document.toPlainText().indexOf(line);
+      final fullText = controller.document.toPlainText();
+      final position = fullText.indexOf(line);
       if (position != -1) {
-        controller.formatText(position, line.length, attribute);
+        controller.replaceText(
+            position, 2, '', TextSelection.collapsed(offset: position),
+            shouldNotifyListeners: false);
+        controller.formatText(position, cleanLine.length, attribute);
       }
     });
   }
@@ -52,13 +61,22 @@ class _NoteViewState extends State<NoteView> {
 
     final Iterable<RegExpMatch> matches = regex.allMatches(text);
     for (RegExpMatch match in matches) {
-      final String boldText = match.group(1)!; // Texto entre os asteriscos
-      text = text.replaceFirst("**$boldText**", boldText);
+      final String boldText = match.group(1)!;
       final int start = match.start;
       final int end = match.end;
-
-      // Aplica a formatação negrito no intervalo correspondente
+      controller.replaceText(
+          start, end - start, '', TextSelection.collapsed(offset: start),
+          shouldNotifyListeners: false);
+      controller.replaceText(start, 0, boldText,
+          TextSelection.collapsed(offset: start + boldText.length),
+          shouldNotifyListeners: false);
       controller.formatText(start, boldText.length, Attribute.bold,
+          shouldNotifyListeners: false);
+      controller.updateSelection(
+          TextSelection.collapsed(offset: start + boldText.length),
+          ChangeSource.local);
+      controller.formatText(
+          start + boldText.length, 0, Attribute.clone(Attribute.bold, null),
           shouldNotifyListeners: false);
     }
   }
