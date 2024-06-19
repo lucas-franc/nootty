@@ -42,14 +42,44 @@ class _NoteViewState extends State<NoteView> {
   }
 
   void _convertToHeader(String line, quill.Attribute attribute) {
-    final cleanLine = line.substring(2);
+    int hashtagQuantity = 0;
+    for (int i = 0; i < line.length; i++) {
+      if (line[i] == '#') {
+        hashtagQuantity++;
+      } else {
+        break;
+      }
+    }
+    final cleanLine = line.substring(hashtagQuantity + 1);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final fullText = controller.document.toPlainText();
       final position = fullText.indexOf(line);
       if (position != -1) {
-        controller.replaceText(
-            position, 2, '', TextSelection.collapsed(offset: position),
+        switch (hashtagQuantity) {
+          case 1:
+            attribute = quill.Attribute.h1;
+            break;
+          case 2:
+            attribute = quill.Attribute.h2;
+            break;
+          case 3:
+            attribute = quill.Attribute.h3;
+            break;
+          case 4:
+            attribute = quill.Attribute.h4;
+            break;
+          case 5:
+            attribute = quill.Attribute.h5;
+            break;
+          case 6:
+            attribute = quill.Attribute.h6;
+            break;
+          default:
+            return;
+        }
+        controller.replaceText(position, hashtagQuantity + 1, '',
+            TextSelection.collapsed(offset: position),
             shouldNotifyListeners: false);
         controller.formatText(position, cleanLine.length, attribute);
       }
@@ -59,25 +89,24 @@ class _NoteViewState extends State<NoteView> {
   void _convertToBold(String text) {
     final RegExp regex = RegExp(r'\*\*(.*?)\*\*');
 
+    String fullText = controller.document.toPlainText();
+
     final Iterable<RegExpMatch> matches = regex.allMatches(text);
     for (RegExpMatch match in matches) {
       final String boldText = match.group(1)!;
-      final int start = match.start;
-      final int end = match.end;
-      controller.replaceText(
-          start, end - start, '', TextSelection.collapsed(offset: start),
-          shouldNotifyListeners: false);
-      controller.replaceText(start, 0, boldText,
+      final int matchStart = match.start;
+      final int matchEnd = match.end;
+      int start = fullText.indexOf(match.group(0)!, matchStart);
+      int end = start + match.group(0)!.length;
+      fullText = fullText.replaceRange(start, end, boldText);
+      controller.replaceText(start, end - start, boldText,
           TextSelection.collapsed(offset: start + boldText.length),
           shouldNotifyListeners: false);
-      controller.formatText(start, boldText.length, Attribute.bold,
-          shouldNotifyListeners: false);
-      controller.updateSelection(
-          TextSelection.collapsed(offset: start + boldText.length),
-          ChangeSource.local);
-      controller.formatText(
-          start + boldText.length, 0, Attribute.clone(Attribute.bold, null),
-          shouldNotifyListeners: false);
+      controller.formatText(start, boldText.length, Attribute.bold);
+      if (matchStart + boldText.length < controller.document.length) {
+        controller.formatText(matchStart + boldText.length, 0,
+            Attribute.clone(Attribute.bold, null));
+      }
     }
   }
 
