@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:flutter_quill/flutter_quill.dart';
 
@@ -27,11 +28,15 @@ class _NoteViewState extends State<NoteView> {
       if (isBoldMarkdown(line)) {
         _convertToBold(line);
       }
+      if (isListMarkdown(line)) {
+        _convertToList(line);
+      }
     }
   }
 
   RegExp boldRegex = RegExp(r'(\*\*.*?\*\*)|(__.*?__)');
   RegExp titleRegex = RegExp(r'^\#{1,6}\s');
+  RegExp listRegex = RegExp(r'^(\-|\*)\s');
 
   bool isBoldMarkdown(String text) {
     return boldRegex.hasMatch(text);
@@ -39,6 +44,56 @@ class _NoteViewState extends State<NoteView> {
 
   bool isTitleMarkdown(String text) {
     return titleRegex.hasMatch(text);
+  }
+
+  bool isListMarkdown(String text) {
+    return listRegex.hasMatch(text);
+  }
+
+  void _convertToList(String line) {
+    final cleanLine = line.substring(2);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final fullText = controller.document.toPlainText();
+      final position = fullText.indexOf(line);
+      if (position != -1) {
+        controller.replaceText(
+            position, 2, '', TextSelection.collapsed(offset: position),
+            shouldNotifyListeners: false);
+        controller.formatText(position, cleanLine.length, quill.Attribute.ul);
+      }
+    });
+  }
+
+  void _handleBackspace(KeyEvent event) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.backspace) {
+      final selection = controller.selection;
+      if (selection.isCollapsed) {
+        final baseOffset = selection.baseOffset;
+        if (baseOffset > 0) {
+          final textBeforeCursor =
+              controller.document.getPlainText(0, baseOffset);
+          final lineStart = textBeforeCursor.lastIndexOf('\n') + 1;
+          final currentLine = textBeforeCursor.substring(lineStart);
+          if (currentLine.startsWith('- ') || currentLine.startsWith('* ')) {
+            controller.formatText(
+                lineStart, 2, quill.Attribute.clone(quill.Attribute.ul, null));
+            controller.replaceText(
+                lineStart, 2, '', TextSelection.collapsed(offset: lineStart),
+                shouldNotifyListeners: false);
+          }
+        } else {
+          final fullText = controller.document.toPlainText();
+          if (fullText.startsWith('- ') || fullText.startsWith('* ')) {
+            controller.formatText(
+                0, 2, quill.Attribute.clone(quill.Attribute.ul, null));
+            controller.replaceText(0, 2, '', TextSelection.collapsed(offset: 0),
+                shouldNotifyListeners: false);
+          }
+        }
+      }
+    }
   }
 
   void _convertToHeader(String line, quill.Attribute attribute) {
@@ -95,7 +150,6 @@ class _NoteViewState extends State<NoteView> {
     for (RegExpMatch match in matches) {
       final String boldText = match.group(1)!;
       final int matchStart = match.start;
-      final int matchEnd = match.end;
       int start = fullText.indexOf(match.group(0)!, matchStart);
       int end = start + match.group(0)!.length;
       fullText = fullText.replaceRange(start, end, boldText);
@@ -119,13 +173,17 @@ class _NoteViewState extends State<NoteView> {
             children: [
               SizedBox(
                 height: 200,
-                child: QuillEditor(
+                child: KeyboardListener(
                   focusNode: FocusNode(),
-                  scrollController: ScrollController(),
-                  configurations: QuillEditorConfigurations(
-                    controller: controller,
-                    sharedConfigurations: const QuillSharedConfigurations(
-                      locale: Locale('de'),
+                  onKeyEvent: _handleBackspace,
+                  child: QuillEditor(
+                    focusNode: FocusNode(),
+                    scrollController: ScrollController(),
+                    configurations: QuillEditorConfigurations(
+                      controller: controller,
+                      sharedConfigurations: const QuillSharedConfigurations(
+                        locale: Locale('de'),
+                      ),
                     ),
                   ),
                 ),
