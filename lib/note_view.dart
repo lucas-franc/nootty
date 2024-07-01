@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:flutter_quill/flutter_quill.dart';
 
@@ -12,10 +11,20 @@ class NoteView extends StatefulWidget {
 
 class _NoteViewState extends State<NoteView> {
   QuillController controller = QuillController.basic();
+  FocusNode focusNode = FocusNode();
   @override
   void initState() {
     super.initState();
     controller.addListener(_onTextChanged);
+    //controller.formatText(0, 1, quill.Attribute.h1);
+    _addDefaultTitle();
+  }
+
+  void _addDefaultTitle() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.document.insert(0, 'Title\n');
+      controller.formatText(0, 5, quill.Attribute.h1);
+    });
   }
 
   void _onTextChanged() {
@@ -65,37 +74,6 @@ class _NoteViewState extends State<NoteView> {
     });
   }
 
-  void _handleBackspace(KeyEvent event) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.backspace) {
-      final selection = controller.selection;
-      if (selection.isCollapsed) {
-        final baseOffset = selection.baseOffset;
-        if (baseOffset > 0) {
-          final textBeforeCursor =
-              controller.document.getPlainText(0, baseOffset);
-          final lineStart = textBeforeCursor.lastIndexOf('\n') + 1;
-          final currentLine = textBeforeCursor.substring(lineStart);
-          if (currentLine.startsWith('- ') || currentLine.startsWith('* ')) {
-            controller.formatText(
-                lineStart, 2, quill.Attribute.clone(quill.Attribute.ul, null));
-            controller.replaceText(
-                lineStart, 2, '', TextSelection.collapsed(offset: lineStart),
-                shouldNotifyListeners: false);
-          }
-        } else {
-          final fullText = controller.document.toPlainText();
-          if (fullText.startsWith('- ') || fullText.startsWith('* ')) {
-            controller.formatText(
-                0, 2, quill.Attribute.clone(quill.Attribute.ul, null));
-            controller.replaceText(0, 2, '', TextSelection.collapsed(offset: 0),
-                shouldNotifyListeners: false);
-          }
-        }
-      }
-    }
-  }
-
   void _convertToHeader(String line, quill.Attribute attribute) {
     int hashtagQuantity = 0;
     for (int i = 0; i < line.length; i++) {
@@ -142,11 +120,9 @@ class _NoteViewState extends State<NoteView> {
   }
 
   void _convertToBold(String text) {
-    final RegExp regex = RegExp(r'\*\*(.*?)\*\*');
-
     String fullText = controller.document.toPlainText();
 
-    final Iterable<RegExpMatch> matches = regex.allMatches(text);
+    final Iterable<RegExpMatch> matches = boldRegex.allMatches(text);
     for (RegExpMatch match in matches) {
       final String boldText = match.group(1)!;
       final int matchStart = match.start;
@@ -173,17 +149,13 @@ class _NoteViewState extends State<NoteView> {
             children: [
               SizedBox(
                 height: 200,
-                child: KeyboardListener(
+                child: QuillEditor(
                   focusNode: FocusNode(),
-                  onKeyEvent: _handleBackspace,
-                  child: QuillEditor(
-                    focusNode: FocusNode(),
-                    scrollController: ScrollController(),
-                    configurations: QuillEditorConfigurations(
-                      controller: controller,
-                      sharedConfigurations: const QuillSharedConfigurations(
-                        locale: Locale('de'),
-                      ),
+                  scrollController: ScrollController(),
+                  configurations: QuillEditorConfigurations(
+                    controller: controller,
+                    sharedConfigurations: const QuillSharedConfigurations(
+                      locale: Locale('de'),
                     ),
                   ),
                 ),
